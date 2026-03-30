@@ -549,13 +549,31 @@ async function exportToPPTX(){
     // Table
     const TABLE_X=4.84, TABLE_Y=0.99;
     const COL_W=[0.63,0.58,1.60,0.91,1.06];
-    const HDR_H=0.23, ROW_H=0.23;
+    const HDR_H=0.23;
     const ENERGY_X=TABLE_X+COL_W[0]+COL_W[1]+COL_W[2]+COL_W[3];
     const ENERGY_W=COL_W[4];
-    const ENERGY_H=ENERGY_W/4.2; // preserve canvas aspect ratio (126x30 = 4.2:1)
 
     const sorted=[...allPeople].sort((a,b)=>parseInt(a['Number']||0)-parseInt(b['Number']||0));
-    const people=sorted.slice(0,20);
+    // Cap at 18 people; table auto-sizes row height to fit the slide
+    const people=sorted.slice(0,18);
+    const nRows=people.length;
+
+    // Available vertical space: slide height 5.625" minus table top, minus footer margin
+    const SLIDE_H=5.625;
+    const FOOTER_Y=5.3;
+    const AVAIL_H=FOOTER_Y-TABLE_Y-0.05; // 0.05" breathing room above footer
+    // Row height: fill available space exactly, min 0.18" for readability
+    const ROW_H=Math.max(0.18, (AVAIL_H-HDR_H)/nRows);
+    // Energy image height preserves canvas aspect ratio (126x30 = 4.2:1)
+    // Always preserve aspect ratio (canvas=134x30px = 4.4667:1).
+    // If correct height exceeds available row space, scale BOTH dims down proportionally.
+    const ENERGY_RATIO=134/30;
+    let ENERGY_H=ENERGY_W/ENERGY_RATIO;
+    let ENERGY_W2=ENERGY_W;
+    if (ENERGY_H > ROW_H*0.88){
+      ENERGY_H=ROW_H*0.88;
+      ENERGY_W2=ENERGY_H*ENERGY_RATIO;
+    }
 
     const hSty={fill:{color:'0064AD'},color:'FFFFFF',bold:true,fontSize:8,fontFace:'Calibri',valign:'middle',align:'left'};
     const cSty={color:'222222',fontSize:8,fontFace:'Calibri',valign:'middle',align:'left',border:[{pt:0,color:'FFFFFF'},{pt:0,color:'FFFFFF'},{pt:1,color:'0064AD'},{pt:0,color:'FFFFFF'}]};
@@ -575,22 +593,18 @@ async function exportToPPTX(){
         {text:'',options:{...cSty}}
       ]);
     });
-    const minRows=15;
-    while (tableRows.length<minRows+1){
-      tableRows.push([{text:'',options:{...cSty}},{text:'',options:{...cSty}},{text:'',options:{...cSty}},{text:'',options:{...cSty}},{text:'',options:{...cSty}}]);
-    }
 
     slide.addTable(tableRows,{
       x:TABLE_X,y:TABLE_Y,w:COL_W.reduce((a,b)=>a+b,0),
-      colW:COL_W,rowH:[HDR_H,...Array(tableRows.length-1).fill(ROW_H)],
+      colW:COL_W,rowH:[HDR_H,...Array(nRows).fill(ROW_H)],
       fontFace:'Calibri',fontSize:8,border:{pt:0,color:'FFFFFF'}
     });
 
-    // Colour energy images per row
+    // Colour energy images per row — centred vertically in each row
     for (let i=0;i<people.length;i++){
       const energyB64=renderEnergyCanvas(people[i]);
       const rowY=TABLE_Y+HDR_H+i*ROW_H+(ROW_H-ENERGY_H)/2;
-      slide.addImage({data:'image/png;base64,'+energyB64,x:ENERGY_X,y:rowY,w:ENERGY_W,h:ENERGY_H});
+      slide.addImage({data:'image/png;base64,'+energyB64,x:ENERGY_X,y:rowY,w:ENERGY_W2,h:ENERGY_H});
     }
 
     slide.addText('© The Insights Group Ltd, 2026. All rights reserved.',{x:6.0,y:5.3,w:3.8,h:0.2,fontSize:7,color:'999999',fontFace:'Calibri',align:'right',margin:0});
